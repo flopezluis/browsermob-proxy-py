@@ -4,18 +4,23 @@ import json
 
 
 class Client(object):
-    def __init__(self, url):
+    def __init__(self, url, port=None):
         """
         Initialises a new Client object
         :Args:
          - url: This is where the BrowserMob Proxy lives
         """
         self.host = url
-        resp = requests.post('%s/proxy' % self.host, urlencode(''))
-        jcontent = json.loads(resp.content)
-        self.port = jcontent['port']
-        url_parts = self.host.split(":")
-        self.proxy = url_parts[0] + ":" + url_parts[1] + ":" + str(self.port)
+        payload = {}
+        if port:
+            payload['port'] = port
+        resp = requests.post('%s/proxy' % self.host, data = payload)
+        if resp.ok:
+            jcontent = json.loads(resp.content)
+            self.port = jcontent['port']
+            url_parts = self.host.split(":")
+            self.proxy = url_parts[0] + ":" + url_parts[1] + ":" + str(self.port)
+        resp.raise_for_status()
 
     def headers(self, headers):
         """
@@ -31,16 +36,18 @@ class Client(object):
                           headers={'content-type': 'application/json'})
         return r.status_code
 
-    def new_har(self, ref=None):
+    def new_har(self, ref=None, capture_headers=False, capture_content=False,\
+            capture_binary_content=False):
         """
         This sets a new HAR to be recorded
         :Args:
          - ref: A reference for the HAR. Defaults to None
         """
+        payload = {'captureContent': capture_content, 'captureBinaryContent' : capture_binary_content,\
+            'captureHeaders':capture_headers}
+
         if ref:
-            payload = {"initialPageRef": ref}
-        else:
-            payload = {}
+            payload["initialPageRef"]= ref
         r = requests.put('%s/proxy/%s/har' % (self.host, self.port), payload)
         return (r.status_code, r.json)
 
@@ -85,8 +92,10 @@ class Client(object):
         Adds an 'proxy' entry to a desired capabilities dictionary with the
         BrowserMob proxy information
         """
-        capabilities['proxy'] = {'proxyType': 'manual',
-                                 'httpProxy': self.proxy}
+        capabilities['proxy'] = {'proxyType': 'MANUAL',
+                                 'httpProxy': self.proxy,
+                                 'sslProxy': self.proxy,
+                                 }
 
     def whitelist(self, regexp, status_code):
         """
